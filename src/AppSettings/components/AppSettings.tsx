@@ -9,6 +9,7 @@ import { useIsMobile, useRouter } from "~Generic/hooks/userinterface"
 import { CurrencyCode } from "~Generic/lib/currency-conversion"
 import { matchesRoute } from "~Generic/lib/routes"
 import Carousel from "~Layout/components/Carousel"
+import { isDefaultProtocolClient, setAsDefaultProtocolClient } from "~Platform/protocol-handler"
 import ManageTrustedServicesDialog from "./ManageTrustedServicesDialog"
 import {
   BiometricLockSetting,
@@ -17,7 +18,8 @@ import {
   MultiSigSetting,
   PreferredCurrencySetting,
   TestnetSetting,
-  TrustedServicesSetting
+  TrustedServicesSetting,
+  ProtocolHandlerSetting
 } from "./Settings"
 
 const SettingsDialogs = React.memo(function SettingsDialogs() {
@@ -32,11 +34,14 @@ function AppSettings() {
   const router = useRouter()
   const { i18n } = useTranslation()
 
+  const [isDefaultHandler, setIsDefaultHandler] = React.useState<boolean>(false)
+
   const showSettingsOverview = matchesRoute(router.location.pathname, routes.settings(), true)
 
   const { accounts } = React.useContext(AccountsContext)
   const settings = React.useContext(SettingsContext)
   const trustedServicesEnabled = process.env.TRUSTED_SERVICES && process.env.TRUSTED_SERVICES === "enabled"
+  const protocolHandlerEnabled = process.env.REQUEST_HANDLER && process.env.REQUEST_HANDLER === "enabled"
 
   const getEffectiveLanguage = <L extends string | undefined, F extends any>(lang: L, fallback: F) => {
     return availableLanguages.indexOf(lang as any) > -1 ? lang : fallback
@@ -62,6 +67,12 @@ function AppSettings() {
     [settings]
   )
 
+  isDefaultProtocolClient().then(setIsDefaultHandler)
+
+  const setDefaultClient = React.useCallback(() => {
+    setAsDefaultProtocolClient().then(success => setIsDefaultHandler(success))
+  }, [setIsDefaultHandler])
+
   return (
     <Carousel current={showSettingsOverview ? 0 : 1}>
       <List style={{ padding: isSmallScreen ? 0 : "24px 16px" }}>
@@ -83,6 +94,11 @@ function AppSettings() {
         />
         <HideMemoSetting onToggle={settings.toggleHideMemos} value={settings.hideMemos} />
         <MultiSigSetting onToggle={settings.toggleMultiSignature} value={settings.multiSignature} />
+        {protocolHandlerEnabled ? (
+          <ProtocolHandlerSetting isDefaultHandler={isDefaultHandler} onClick={setDefaultClient} />
+        ) : (
+          undefined
+        )}
         {trustedServicesEnabled ? <TrustedServicesSetting onClick={navigateToTrustedServices} /> : undefined}
       </List>
       <SettingsDialogs />
