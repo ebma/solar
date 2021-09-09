@@ -57,7 +57,7 @@
     "nanoid": "^2.1.1",
     "react-hook-form": "^5.0.3",
     "stellar-sdk": "^7.0.0",
-    "stellar-hd-wallet": "0.0.10"
+    "stellar-hd-wallet": "^0.0.10"
   },
   "devDependencies": {
     "@material-ui/core": "^4.5.1",
