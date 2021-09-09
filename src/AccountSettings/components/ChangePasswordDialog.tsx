@@ -78,6 +78,7 @@ interface ActionsProps {
   removePassword: boolean
   onSubmit: () => void
   onToggleRemovePassword: () => void
+  testnet?: boolean
 }
 
 function Actions(props: ActionsProps) {
@@ -100,7 +101,7 @@ function Actions(props: ActionsProps) {
           />
         )
       ) : null}
-      <ActionButton icon={<LockIcon />} onClick={props.onSubmit} type="primary">
+      <ActionButton icon={<LockIcon />} onClick={props.onSubmit} testnet={props.testnet} type="primary">
         {isSmallScreen
           ? props.removePassword
             ? t("account-settings.set-password.action.remove-password.long")
@@ -232,6 +233,7 @@ function ChangePasswordDialog(props: Props) {
             onSubmit={submit}
             onToggleRemovePassword={toggleRemovePassword}
             removePassword={removingPassword}
+            testnet={props.account.testnet}
           />
         </DialogActions>
       }
