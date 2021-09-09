@@ -57,7 +57,8 @@
     "nanoid": "^2.1.1",
     "react-hook-form": "^5.0.3",
     "stellar-sdk": "^7.0.0",
-    "stellar-hd-wallet": "^0.0.10"
+    "stellar-hd-wallet": "^0.0.10",
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
     "@material-ui/core": "^4.5.1",
@@ -96,6 +97,7 @@
     "@types/storybook__addon-actions": "^3.4.3",
     "@types/storybook__react": "^3.0.9",
     "@types/zen-observable": "^0.8.0",
+    "@types/zxcvbn": "^4.4.0",
     "@typescript-eslint/parser": "^2.19.2",
     "babel-core": "^6.26.3",
     "babel-loader": "^8.0.6",

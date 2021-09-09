@@ -10,6 +10,7 @@ export interface AccountCreation {
   secretKey?: string
   testnet: boolean
   useMnemonic: boolean
+  weakPassword: boolean
 }
 
 export interface AccountCreationErrors {

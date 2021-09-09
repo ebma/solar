@@ -90,7 +90,8 @@ function useAccountCreation(options: UseAccountCreationOptions) {
     repeatedPassword: "",
     requiresPassword: true,
     testnet: options.testnet,
-    useMnemonic: false
+    useMnemonic: false,
+    weakPassword: true
   }))
 
   const createNewAccount = async (accountCreation: AccountCreation) => {
