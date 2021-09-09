@@ -6,7 +6,7 @@ import nanoid from "nanoid"
 import React from "react"
 import { Controller, useForm } from "react-hook-form"
 import { useTranslation } from "react-i18next"
-import { Asset, Memo, MemoType, Server, Transaction } from "stellar-sdk"
+import { Asset, FederationServer, Memo, MemoType, Server, Transaction } from "stellar-sdk"
 import { Account } from "~App/contexts/accounts"
 import { SettingsContext } from "~App/contexts/settings"
 import AssetSelector from "~Generic/components/AssetSelector"
@@ -25,7 +25,6 @@ import { RefStateObject, useIsMobile } from "~Generic/hooks/userinterface"
 import { AccountData } from "~Generic/lib/account"
 import { formatBalance } from "~Generic/lib/balances"
 import { CurrencyCode } from "~Generic/lib/currency-conversion"
-import { CustomError } from "~Generic/lib/errors"
 import { FormBigNumber, isValidAmount, replaceCommaWithDot } from "~Generic/lib/form"
 import { findMatchingBalanceLine, getAccountMinimumBalance, getSpendableBalance } from "~Generic/lib/stellar"
 import { isPublicKey, isStellarAddress } from "~Generic/lib/stellar-address"
@@ -77,11 +76,16 @@ interface PaymentFormProps {
 const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
   const isSmallScreen = useIsMobile()
   const formID = React.useMemo(() => nanoid(), [])
+  const { lookupFederationRecord } = useFederationLookup()
+
   const { t } = useTranslation()
   const wellknownAccounts = useWellKnownAccounts(props.testnet)
 
   const { preferredCurrency } = React.useContext(SettingsContext)
 
+  const [matchingFederationRecord, setMatchingFederationRecord] = React.useState<FederationServer.Record | undefined>(
+    undefined
+  )
   const [matchingWellknownAccount, setMatchingWellknownAccount] = React.useState<AccountRecord | undefined>(undefined)
   const [memoType, setMemoType] = React.useState<MemoType>("none")
   const [memoMetadata, setMemoMetadata] = React.useState<MemoMetadata>({
@@ -145,7 +149,7 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
   }, [amountTypeToAssetEstimate, formValues.amount, formValues.amountType, formValues.asset, setValue])
 
   React.useEffect(() => {
-    if (!isPublicKey(formValues.destination) && !isStellarAddress(formValues.destination)) {
+    if (!isPublicKey(formValues.destination)) {
       if (matchingWellknownAccount) {
         setMatchingWellknownAccount(undefined)
       }
@@ -178,6 +182,22 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
   const handleFormSubmission = () => {
     props.onSubmit({ memoType, ...form.getValues() }, spendableBalance, matchingWellknownAccount)
   }
+
+  React.useEffect(() => {
+    if (matchingFederationRecord) {
+      setValue("memoValue", matchingFederationRecord.memo)
+      const requiredType =
+        matchingFederationRecord.memo_type && !matchingFederationRecord.memo_type.toLowerCase().includes("text")
+          ? "id"
+          : "text"
+      setMemoType(requiredType)
+      setMemoMetadata({
+        label: requiredType === "id" ? t("payment.memo-metadata.label.id") : t("payment.memo-metadata.label.text"),
+        placeholder: t("payment.memo-metadata.placeholder.optional"),
+        requiredType
+      })
+    }
+  }, [matchingFederationRecord, setValue, t])
 
   const handleQRScan = React.useCallback(
     (scanResult: string) => {
@@ -223,16 +243,38 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
         inputRef={form.register({
           required: t<string>("payment.validation.no-destination"),
           validate: value =>
-            isPublicKey(value) || isStellarAddress(value) || t<string>("payment.validation.invalid-destination")
+            (isStellarAddress(value) &&
+              !Boolean(matchingFederationRecord) &&
+              t<string>("payment.validation.stellar-address-not-found")) ||
+            isPublicKey(value) ||
+            isStellarAddress(value) ||
+            t<string>("payment.validation.invalid-destination")
         })}
         label={form.errors.destination ? form.errors.destination.message : t("payment.inputs.destination.label")}
         margin="normal"
         name="destination"
-        onChange={event => setValue("destination", event.target.value.trim())}
+        onChange={async event => {
+          const destination = event.target.value.trim()
+          setValue("destination", destination)
+          try {
+            const federationRecord = await lookupFederationRecord(destination)
+            if (federationRecord && federationRecord.memo && federationRecord.memo_type) {
+              setMatchingFederationRecord(federationRecord)
+              form.triggerValidation("destination")
+            } else {
+              setMatchingFederationRecord(undefined)
+            }
+          } catch (error) {
+            // check destination again because it might have changed by the time we receive this error
+            if (destination === form.getValues().destination) {
+              setMatchingFederationRecord(undefined)
+            }
+          }
+        }}
         placeholder={t("payment.inputs.destination.placeholder")}
       />
     ),
-    [form, qrReaderAdornment, setValue, t]
+    [form, lookupFederationRecord, matchingFederationRecord, qrReaderAdornment, setValue, t]
   )
 
   const assetSelector = React.useMemo(
@@ -363,6 +405,7 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
   const memoInput = React.useMemo(
     () => (
       <TextField
+        disabled={Boolean(matchingFederationRecord)}
         error={Boolean(form.errors.memoValue)}
         inputProps={{ maxLength: 28 }}
         label={form.errors.memoValue ? form.errors.memoValue.message : memoMetadata.label}
@@ -407,6 +450,7 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
     [
       form,
       memoType,
+      matchingFederationRecord,
       matchingWellknownAccount,
       memoMetadata.label,
       memoMetadata.placeholder,
@@ -467,20 +511,7 @@ function PaymentFormContainer(props: Props) {
     const federationRecord =
       formValues.destination.indexOf("*") > -1 ? await lookupFederationRecord(formValues.destination) : null
     const destination = federationRecord ? federationRecord.account_id : formValues.destination
-
-    const userMemo = createMemo(formValues.memoType, formValues.memoValue)
-    const federationMemo =
-      federationRecord && federationRecord.memo && federationRecord.memo_type
-        ? new Memo(federationRecord.memo_type as MemoType, federationRecord.memo)
-        : Memo.none()
-
-    if (userMemo.type !== "none" && federationMemo.type !== "none") {
-      throw CustomError(
-        "MemoAlreadySpecifiedError",
-        `Cannot set a custom memo. Federation record of ${formValues.destination} already specifies memo.`,
-        { destination: formValues.destination }
-      )
-    }
+    const memo = createMemo(formValues.memoType, formValues.memoValue)
 
     const isMultisigTx = props.accountData.signers.length > 1
 
@@ -492,7 +523,7 @@ function PaymentFormContainer(props: Props) {
     })
     const tx = await createTransaction([payment], {
       accountData: props.accountData,
-      memo: federationMemo.type !== "none" ? federationMemo : userMemo,
+      memo,
       minTransactionFee: isMultisigTx ? multisigMinimumFee : 0,
       horizon,
       walletAccount: account
