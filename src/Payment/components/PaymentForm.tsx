@@ -12,7 +12,8 @@ import { SettingsContext } from "~App/contexts/settings"
 import AssetSelector from "~Generic/components/AssetSelector"
 import CurrencySelector from "~Generic/components/CurrencySelector"
 import { ActionButton, DialogActionsBox } from "~Generic/components/DialogActions"
-import { PriceInput, QRReader } from "~Generic/components/FormFields"
+import { MemoInput, PriceInput, QRReader } from "~Generic/components/FormFields"
+import MemoSelector from "~Generic/components/MemoSelector"
 import Portal from "~Generic/components/Portal"
 import { useFederationLookup } from "~Generic/hooks/stellar"
 import {
@@ -37,6 +38,7 @@ export interface PaymentFormValues {
   asset: Asset
   amountType: Asset | CurrencyCode
   destination: string
+  memoType: MemoType
   memoValue: string
 }
 
@@ -45,7 +47,7 @@ type ExtendedPaymentFormValues = PaymentFormValues & { memoType: MemoType }
 interface MemoMetadata {
   label: string
   placeholder: string
-  requiredType: MemoType | undefined
+  required: boolean
 }
 
 function createMemo(memoType: MemoType, memoValue: string) {
@@ -79,7 +81,7 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
   const { lookupFederationRecord } = useFederationLookup()
 
   const { t } = useTranslation()
-  const wellknownAccounts = useWellKnownAccounts(props.testnet)
+  const wellknownAccounts = useWellKnownAccounts()
 
   const { preferredCurrency } = React.useContext(SettingsContext)
 
@@ -87,11 +89,10 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
     undefined
   )
   const [matchingWellknownAccount, setMatchingWellknownAccount] = React.useState<AccountRecord | undefined>(undefined)
-  const [memoType, setMemoType] = React.useState<MemoType>("none")
   const [memoMetadata, setMemoMetadata] = React.useState<MemoMetadata>({
     label: t("payment.memo-metadata.label.default"),
     placeholder: t("payment.memo-metadata.placeholder.optional"),
-    requiredType: undefined
+    required: false
   })
   const form = useForm<PaymentFormValues>({
     defaultValues: {
@@ -100,6 +101,7 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
       eventualAmount: "",
       asset: Asset.native(),
       destination: "",
+      memoType: "none",
       memoValue: ""
     }
   })
@@ -149,38 +151,31 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
   }, [amountTypeToAssetEstimate, formValues.amount, formValues.amountType, formValues.asset, setValue])
 
   React.useEffect(() => {
-    if (!isPublicKey(formValues.destination)) {
-      if (matchingWellknownAccount) {
-        setMatchingWellknownAccount(undefined)
-      }
-      return
+    if (isPublicKey(formValues.destination) || isStellarAddress(formValues.destination)) {
+      wellknownAccounts.lookup(formValues.destination).then(setMatchingWellknownAccount)
+    } else {
+      setMatchingWellknownAccount(undefined)
     }
+  }, [formValues.destination, wellknownAccounts])
 
-    const knownAccount = wellknownAccounts.lookup(formValues.destination)
-    setMatchingWellknownAccount(knownAccount)
-
-    if (knownAccount && knownAccount.tags.indexOf("exchange") !== -1) {
-      const acceptedMemoType = knownAccount.accepts && knownAccount.accepts.memo
-      const requiredType = acceptedMemoType === "MEMO_ID" ? "id" : "text"
-      setMemoType(requiredType)
+  React.useEffect(() => {
+    if (matchingWellknownAccount && matchingWellknownAccount.tags.indexOf("memo-required") !== -1) {
       setMemoMetadata({
-        label:
-          acceptedMemoType === "MEMO_ID" ? t("payment.memo-metadata.label.id") : t("payment.memo-metadata.label.text"),
+        label: t("payment.memo-metadata.label.required"),
         placeholder: t("payment.memo-metadata.placeholder.mandatory"),
-        requiredType
+        required: true
       })
     } else {
-      setMemoType(formValues.memoValue.length === 0 ? "none" : "text")
       setMemoMetadata({
         label: t("payment.memo-metadata.label.default"),
         placeholder: t("payment.memo-metadata.placeholder.optional"),
-        requiredType: undefined
+        required: false
       })
     }
-  }, [formValues.destination, formValues.memoValue, matchingWellknownAccount, memoType, t, wellknownAccounts])
+  }, [formValues.destination, formValues.memoValue, matchingWellknownAccount, t, wellknownAccounts])
 
   const handleFormSubmission = () => {
-    props.onSubmit({ memoType, ...form.getValues() }, spendableBalance, matchingWellknownAccount)
+    props.onSubmit(form.getValues(), spendableBalance, matchingWellknownAccount)
   }
 
   React.useEffect(() => {
@@ -190,11 +185,11 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
         matchingFederationRecord.memo_type && !matchingFederationRecord.memo_type.toLowerCase().includes("text")
           ? "id"
           : "text"
-      setMemoType(requiredType)
+      setValue("memoType", requiredType)
       setMemoMetadata({
         label: requiredType === "id" ? t("payment.memo-metadata.label.id") : t("payment.memo-metadata.label.text"),
         placeholder: t("payment.memo-metadata.placeholder.optional"),
-        requiredType
+        required: Boolean(requiredType)
       })
     }
   }, [matchingFederationRecord, setValue, t])
@@ -212,7 +207,7 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
       const memoValue = searchParams.get("dt")
 
       if (memoValue) {
-        setMemoType("id")
+        setValue("memoType", "id")
         setValue("memoValue", memoValue)
       }
     },
@@ -402,10 +397,22 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
     t
   ])
 
+  const memoSelector = React.useMemo(
+    () => (
+      <Controller
+        as={<MemoSelector disableUnderline value={formValues.memoType} />}
+        control={form.control}
+        name="memoType"
+      />
+    ),
+    [form.control, formValues.memoType]
+  )
+
   const memoInput = React.useMemo(
     () => (
-      <TextField
+      <MemoInput
         disabled={Boolean(matchingFederationRecord)}
+        memoSelector={memoSelector}
         error={Boolean(form.errors.memoValue)}
         inputProps={{ maxLength: 28 }}
         label={form.errors.memoValue ? form.errors.memoValue.message : memoMetadata.label}
@@ -415,7 +422,7 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
           validate: {
             length: value => value.length <= 28 || t<string>("payment.validation.memo-too-long"),
             memoRequired: value =>
-              !memoMetadata.requiredType ||
+              !memoMetadata.required ||
               !matchingWellknownAccount ||
               value.length > 0 ||
               t<string>(
@@ -426,16 +433,16 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
                 }
               ),
             idPattern: value =>
-              memoType !== "id" || value.match(/^[0-9]+$/) || t<string>("payment.validation.integer-memo-required")
+              formValues.memoType !== "id" ||
+              value.match(/^[0-9]+$/) ||
+              t<string>("payment.validation.integer-memo-required")
           }
         })}
         onChange={event => {
           const { value } = event.target
-          if (!memoMetadata.requiredType) {
-            // only change memo type if no type is required
-            const newMemoType = value.length === 0 ? "none" : "text"
-            setMemoType(newMemoType)
-          }
+          const newMemoType =
+            value.length === 0 ? "none" : formValues.memoType === "none" ? "text" : formValues.memoType
+          setValue("memoType", newMemoType)
           setValue("memoValue", value)
         }}
         placeholder={memoMetadata.placeholder}
@@ -449,12 +456,13 @@ const PaymentForm = React.memo(function PaymentForm(props: PaymentFormProps) {
     ),
     [
       form,
-      memoType,
       matchingFederationRecord,
+      formValues.memoType,
       matchingWellknownAccount,
+      memoSelector,
       memoMetadata.label,
       memoMetadata.placeholder,
-      memoMetadata.requiredType,
+      memoMetadata.required,
       setValue,
       t
     ]

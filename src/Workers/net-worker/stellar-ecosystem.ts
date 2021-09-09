@@ -4,10 +4,8 @@ import { AssetRecord } from "~Generic/lib/stellar-ticker"
 import { CurrencyCode, QuoteRecord } from "~Generic/lib/currency-conversion"
 import { CustomError } from "~Generic/lib/errors"
 
-export async function fetchWellknownAccounts(testnet: boolean): Promise<AccountRecord[]> {
-  const requestURL = testnet
-    ? "https://api.stellar.expert/api/explorer/testnet/directory"
-    : "https://api.stellar.expert/api/explorer/public/directory"
+export async function fetchWellknownAccount(accountID: string): Promise<AccountRecord | null> {
+  const requestURL = "https://api.stellar.expert/api/explorer/directory" + `?address[]=${accountID}`
 
   const response = await fetch(requestURL)
 
@@ -20,7 +18,8 @@ export async function fetchWellknownAccounts(testnet: boolean): Promise<AccountR
 
   const json = await response.json()
   const knownAccounts = json._embedded.records as AccountRecord[]
-  return knownAccounts
+  const account = knownAccounts.length > 0 ? knownAccounts[0] : null
+  return account
 }
 
 function byAccountCountSorter(a: AssetRecord, b: AssetRecord) {
