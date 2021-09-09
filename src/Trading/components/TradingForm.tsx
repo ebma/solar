@@ -15,14 +15,16 @@ import ExpandMoreIcon from "@material-ui/icons/ExpandMore"
 import GavelIcon from "@material-ui/icons/Gavel"
 import { Account } from "~App/contexts/accounts"
 import { trackError } from "~App/contexts/notifications"
+import { SettingsContext } from "~App/contexts/settings"
 import { warningColor } from "~App/theme"
 import AssetSelector from "~Generic/components/AssetSelector"
 import { ActionButton, DialogActionsBox } from "~Generic/components/DialogActions"
 import { ReadOnlyTextfield } from "~Generic/components/FormFields"
 import Portal from "~Generic/components/Portal"
 import { useHorizon } from "~Generic/hooks/stellar"
-import { useLiveOrderbook } from "~Generic/hooks/stellar-subscriptions"
 import { RefStateObject, useIsMobile } from "~Generic/hooks/userinterface"
+import { useLiveOrderbook } from "~Generic/hooks/stellar-subscriptions"
+import { useFiatEstimate } from "~Generic/hooks/stellar-ecosystem"
 import { AccountData } from "~Generic/lib/account"
 import { CustomError } from "~Generic/lib/errors"
 import {
@@ -82,6 +84,7 @@ function TradingForm(props: Props) {
   const isSmallHeightScreen = useMediaQuery("(max-height: 500px)")
   const isSmallScreenXY = isSmallScreen || isSmallHeightScreen
   const { t } = useTranslation()
+  const { preferredCurrency } = React.useContext(SettingsContext)
 
   const [expanded, setExpanded] = React.useState(false)
   const [priceMode, setPriceMode] = React.useState<"primary" | "secondary">("secondary")
@@ -105,6 +108,7 @@ function TradingForm(props: Props) {
     }
   }, [form, primaryAsset, props.initialPrimaryAsset])
 
+  const assetEstimate = useFiatEstimate(secondaryAsset, preferredCurrency, props.account.testnet)
   const horizon = useHorizon(props.account.testnet)
   const tradePair = useLiveOrderbook(primaryAsset || Asset.native(), secondaryAsset, props.account.testnet)
 
@@ -351,6 +355,14 @@ function TradingForm(props: Props) {
           />
           <ReadOnlyTextfield
             disableUnderline
+            FormHelperTextProps={{
+              style: { marginTop: 0 }
+            }}
+            helperText={
+              secondaryAmount.cmp(0)
+                ? `~ ${assetEstimate.convertAmount(secondaryAmount).toFixed(2)} ${preferredCurrency}`
+                : ""
+            }
             inputProps={{
               style: { height: 27 }
             }}
