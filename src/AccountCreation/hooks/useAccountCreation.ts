@@ -1,6 +1,7 @@
 import React from "react"
 import { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
+import StellarMnemonic from "stellar-hd-wallet"
 import { Keypair } from "stellar-sdk"
 import { Account, AccountsContext } from "~App/contexts/accounts"
 import { CustomError } from "~Generic/lib/errors"
@@ -47,13 +48,21 @@ function validateAccountCreation(t: TFunction, accounts: Account[], accountCreat
     errors.password = t("create-account.validation.password-no-match")
   }
 
-  if (accountCreation.import && !isValidSecretKey(accountCreation.secretKey!)) {
+  if (accountCreation.import && !accountCreation.useMnemonic && !isValidSecretKey(accountCreation.secretKey!)) {
     errors.secretKey = t("create-account.validation.invalid-key")
   } else if (
     accountCreation.import &&
-    isAccountAlreadyImported(accountCreation.secretKey!, accounts, accountCreation.testnet)
+    accountCreation.useMnemonic &&
+    !StellarMnemonic.validateMnemonic(accountCreation.mnemonic || "")
   ) {
-    errors.secretKey = t("create-account.validation.same-account")
+    errors.secretKey = t("create-account.validation.invalid-mnemonic")
+  } else if (accountCreation.import) {
+    const secretKey =
+      accountCreation.secretKey ||
+      (accountCreation.mnemonic && StellarMnemonic.fromMnemonic(accountCreation.mnemonic).getSecret(0))
+    if (secretKey && isAccountAlreadyImported(secretKey, accounts, accountCreation.testnet)) {
+      errors.secretKey = t("create-account.validation.same-account")
+    }
   }
 
   return {
@@ -80,7 +89,8 @@ function useAccountCreation(options: UseAccountCreationOptions) {
     password: "",
     repeatedPassword: "",
     requiresPassword: true,
-    testnet: options.testnet
+    testnet: options.testnet,
+    useMnemonic: false
   }))
 
   const createNewAccount = async (accountCreation: AccountCreation) => {
@@ -91,7 +101,11 @@ function useAccountCreation(options: UseAccountCreationOptions) {
       )
     }
 
-    const keypair = accountCreation.import ? Keypair.fromSecret(accountCreation.secretKey!) : Keypair.random()
+    const keypair = accountCreation.import
+      ? accountCreation.useMnemonic && accountCreation.mnemonic
+        ? StellarMnemonic.fromMnemonic(accountCreation.mnemonic).getKeypair(0)
+        : Keypair.fromSecret(accountCreation.secretKey!)
+      : Keypair.random()
 
     const account = await createAccount({
       cosignerOf: accountCreation.cosignerOf,

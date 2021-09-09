@@ -36,10 +36,22 @@
   },
   "inputs": {
     "import": {
-      "helper-text": "A Stellar secret key is 56 alphanumeric characters long and starts with an S",
-      "placeholder": "SABCDEFGH…",
-      "label": "Secret key",
-      "title": "Import Existing"
+      "mnemonic": {
+        "helper-text": "A mnemonic sentence is a group of 12 to 24 words",
+        "placeholder": "actress banana cheese detail…",
+        "label": "Mnemonic sentence",
+        "title": "Import Existing"
+      },
+      "secret-key": {
+        "helper-text": "A Stellar secret key is 56 alphanumeric characters long and starts with an S",
+        "placeholder": "SABCDEFGH…",
+        "label": "Secret key",
+        "title": "Import Existing"
+      },
+      "toggle-method": {
+        "use-mnemonic": "Use mnemonic phrase",
+        "use-secret-key": "Use secret key"
+      }
     },
     "multisig-account": {
       "explanation-long": "Make sure the account to join has at least 2 XLM on it, so they can add you as a co-signer.",
@@ -67,8 +79,14 @@
       "description": "Key is signer of another account"
     },
     "import": {
-      "label": "Import secret key",
-      "description": "Restore account from backup"
+      "label": {
+        "mnemonic": "Import with backup phrase",
+        "secret-key": "Import secret key"
+      },
+      "description": {
+        "mnemonic": "Restore account from mnemonic backup phrase",
+        "secret-key": "Restore account from backup key"
+      }
     },
     "password": {
       "label": "Password protection",
@@ -78,6 +96,7 @@
   },
   "validation": {
     "invalid-key": "Invalid Stellar secret key.",
+    "invalid-mnemonic": "Invalid mnemonic phrase.",
     "no-account-name": "No account name has been entered.",
     "no-password": "No password has been entered.",
     "password-no-match": "Password does not match.",

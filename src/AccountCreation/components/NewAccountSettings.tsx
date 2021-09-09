@@ -31,6 +31,13 @@ function NewAccountSettings(props: NewAccountSettingsProps) {
     [onUpdateAccountCreation]
   )
 
+  const toggleUseMnemonic = React.useCallback(
+    (useMnemonic: boolean) => {
+      onUpdateAccountCreation({ useMnemonic })
+    },
+    [onUpdateAccountCreation]
+  )
+
   const updatePassword = React.useCallback(
     (password: string) => {
       onUpdateAccountCreation({ password })
@@ -52,6 +59,13 @@ function NewAccountSettings(props: NewAccountSettingsProps) {
     [onUpdateAccountCreation]
   )
 
+  const updateMnemonic = React.useCallback(
+    (mnemonic: string) => {
+      onUpdateAccountCreation({ mnemonic })
+    },
+    [onUpdateAccountCreation]
+  )
+
   return (
     <List style={{ padding: isSmallScreen ? 0 : "24px 16px" }}>
       {props.accountCreation.import ? (
@@ -59,7 +73,11 @@ function NewAccountSettings(props: NewAccountSettingsProps) {
           <SecretKeyImport
             error={props.errors.secretKey}
             onEnterSecretKey={updateSecretKey}
+            onEnterMnemonic={updateMnemonic}
+            onToggleUseMnemonic={toggleUseMnemonic}
             secretKey={props.accountCreation.secretKey || ""}
+            mnemonic={props.accountCreation.mnemonic || ""}
+            useMnemonic={props.accountCreation.useMnemonic}
           />
           <MultisigAccountPubKey
             enabled={props.accountCreation.cosigner}
